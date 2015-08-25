@@ -1,0 +1,17 @@
+@(loginForm: Form[(String, String)])(implicit messages: Messages, flash: Flash)
+
+@import helper._
+
+@main("Welcome to Play") {
+
+    @flash.get("message").map { message =>
+        <h1>@message</h1>
+    }
+
+    @form(action = routes.Authentication.doLogin) {
+        @inputText(loginForm("username"))
+        @inputPassword(loginForm("password"))
+        <input type="submit" value="login" />
+    }
+
+}
