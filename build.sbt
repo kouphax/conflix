@@ -11,7 +11,11 @@ libraryDependencies ++= Seq(
   cache,
   ws,
   specs2 % Test,
-  "com.github.t3hnar" %%	"scala-bcrypt" %	"2.4"
+  "com.github.t3hnar" %%	"scala-bcrypt" %	"2.4",
+  "com.typesafe.play" %% "anorm" % "2.4.0",
+  evolutions,
+  "org.squeryl" %% "squeryl" % "0.9.6-RC3",
+  "com.h2database" % "h2" % "1.4.188"
 )
 
 resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases"

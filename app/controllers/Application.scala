@@ -9,33 +9,33 @@ import play.api.data._
 import play.api.data.Forms._
 import com.github.t3hnar.bcrypt._
 import play.api.i18n.Messages.Implicits._
+import db.Domain._
+import db.Domain.Database._
 
 case class LoginForm(username: String, password: String)
 
-object LoginForm {
+class Authentication @Inject()(val messagesApi: MessagesApi) extends Controller with Secured with I18nSupport {
+
   val mapper = Form(
     tuple(
       "username" -> nonEmptyText,
       "password" -> nonEmptyText
     )
   )
-}
-
-class Authentication @Inject()(val db: Db, val messagesApi: MessagesApi) extends Controller with Secured with I18nSupport {
 
   def showLogin = Action { implicit request =>
-    Ok(views.html.login(LoginForm.mapper))
+    Ok(views.html.login(mapper))
   }
 
   def doLogin = Action { implicit request =>
     val badResponse = Redirect(routes.Authentication.showLogin)
       .flashing("message" -> "Invalid username or password")
-    LoginForm.mapper.bindFromRequest().fold(
+    mapper.bindFromRequest().fold(
       invalidForm => badResponse,
-      validForm => {
-        db.user(validForm._1).fold(badResponse) {
-          case User(username, password) if validForm._2.isBcrypted(password) =>
-            Redirect(routes.Application.index).withSession("email" -> username)
+      validForm => transaction {
+        from(users)(u => where(u.email === validForm._1) select(u)).singleOption.fold(badResponse) {
+          case User(email, password) if validForm._2.isBcrypted(password) =>
+            Redirect(routes.Application.index).withSession("email" -> email)
         }
       })
   }
@@ -45,10 +45,10 @@ class Authentication @Inject()(val db: Db, val messagesApi: MessagesApi) extends
   }
 }
 
-class Application @Inject()(val db: Db) extends Controller with Secured {
+class Application @Inject()() extends Controller with Secured {
 
   def index = isAuthenticated { user => implicit request =>
-    Ok(views.html.index(user.name))
+    Ok(views.html.index(user.email))
   }
 
   def login = Action {
@@ -56,7 +56,7 @@ class Application @Inject()(val db: Db) extends Controller with Secured {
   }
 
   def setSession = Action {
-    Redirect(routes.Application.index).withSession("email" -> "james@james.com")
+    Redirect(routes.Application.index).withSession("email" -> "james")
   }
 
   def unsetSession = Action {
@@ -65,25 +65,15 @@ class Application @Inject()(val db: Db) extends Controller with Secured {
 
 }
 
-case class User(name: String, password: String)
-
-@Singleton
-class Db {
-
-  val Users = Map(
-    "james" -> User("james", "password".bcrypt)
-  )
-
-  def user(name: String): Option[User] = Users.get(name)
-}
-
-
 trait Secured {
 
-  val db: Db
-
   def user(request: RequestHeader): Option[User] = {
-    request.session.get("email").flatMap(db.user)
+    request.session.get("email").flatMap { e =>
+      transaction {
+        from(users)(u => where(u.email === e) select u)
+          .singleOption
+      }
+    }
   }
 
   def onUnauthorized(request: RequestHeader) = {
